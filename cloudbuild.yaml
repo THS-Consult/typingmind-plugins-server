@@ -1,0 +1,43 @@
+# cloudbuild.yaml for typingmind/plugins-server
+steps:
+  # Step 1: Build the Docker image using the Dockerfile in the current directory (.)
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      # Define a unique image path in Artifact Registry for this plugins-server
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/typingmind-plugins-server/typingmind-plugins-server:$COMMIT_SHA'
+      - '.'
+
+  # Step 2: Push the Docker image to Google Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/typingmind-plugins-server/typingmind-plugins-server:$COMMIT_SHA'
+
+  # Step 3: Deploy the image to a NEW Google Cloud Run service
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'typingmind-plugins-server' # << CHOOSE A NAME FOR THIS NEW CLOUD RUN SERVICE
+      - '--image=us-central1-docker.pkg.dev/$PROJECT_ID/typingmind-plugins-server/typingmind-plugins-server:$COMMIT_SHA'
+      - '--region=us-central1' # Or your preferred region
+      - '--platform=managed'
+      # The Dockerfile EXPOSEs 8080, and Cloud Run will set PORT=8080.
+      # The 'npm run start' script in plugins-server/package.json likely uses process.env.PORT.
+      - '--port=8080'
+      - '--memory=1Gi' # Adjust as needed
+      - '--min-instances=0'
+      - '--max-instances=3' # Adjust as needed for a utility server
+      # No application-specific environment variables needed based on TypingMind's docs for this server.
+      # However, you might want to set general ones like NODE_ENV=production if the app uses it.
+      # - '--set-env-vars=NODE_ENV=production' 
+      - '--allow-unauthenticated' # As per TypingMind's advice to keep URL secret, but server is open.
+
+images:
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/typingmind-plugins-server/typingmind-plugins-server:$COMMIT_SHA'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
